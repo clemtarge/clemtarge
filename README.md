@@ -1,5 +1,9 @@
 ### Hi there 👋
 
+## FastML
+FastML allows you to create, train, test, and save your Machine Learning model with two lines of code.
+You can also optimize it by specifying hyperparameters thanks to Bayesian Optimization.
+
 <!--
 **clemtarge/clemtarge** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
