@@ -1,7 +1,7 @@
 ### Hi there 👋
 
 ## FastML
-FastML allows you to create, train, test, and save your Machine Learning model with two lines of code.
+FastML allows you to *create*, *train*, *test*, and *save* your Machine Learning model with two lines of code.  
 You can also optimize it by specifying hyperparameters thanks to Bayesian Optimization.
 
 <!--
