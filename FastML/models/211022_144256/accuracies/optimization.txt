@@ -1,0 +1,14 @@
+['n_estimators', 'min_samples_split', 'min_weight_fraction_leaf', 'random_state']
+
+Duration of optimization: 8.67884 s
+best score: 0.28933333333333333
+best parameters found: [40, 10, 0.0, 42]
+
+5 combinations with associated score (n_lhs=3, n_ego=2)
+[40, 10, 0.0, 42]: 0.28933333333333333
+[20, 4, 0.033987840918404455, 42]: 0.25533333333333336
+[20, 4, 0.08464610010264015, 42]: 0.23266666666666666
+[10, 2, 0.2925009318974704, 42]: 0.16066666666666668
+[40, 10, 0.4746943785121951, 42]: 0.15133333333333332
+
+

@@ -1,0 +1,6 @@
+https://blog.flozz.fr/2020/10/04/documenter-un-projet-python-avec-sphinx/
+export PYTHONPATH=.
+make html
+
+https://medium.com/@richdayandnight/a-simple-tutorial-on-how-to-document-your-python-project-using-sphinx-and-rinohtype-177c22a15b5b
+sphinx-build -b rinoh source _build/rinoh
