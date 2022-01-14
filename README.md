@@ -6,7 +6,7 @@ You can also *optimize* it with **Bayesian Optimization** by specifying hyperpar
 In this notebook, you will find some functions to *visualize*, *transform* and *replace NaN values* in the data.
 
 
-## Non parametric statistical tests
+## Non parametric statistical tests (R notebook)
 In this notebook, you will find some statistical tests to test:
 
 * Adequation to a distribution
