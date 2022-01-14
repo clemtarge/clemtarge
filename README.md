@@ -1,6 +1,6 @@
 ## FastML
 FastML allows you to *create*, *train*, *test*, and *save* your Machine Learning model with two lines of code.  
-You can also *optimize* it with **Bayesian Optimization** by specifying hyperparameters.
+You can also *optimize* it with **Bayesian Optimization** by specifying model hyperparameters.
 
 ## Preprocessing (Python notebook)
 In this notebook, you will find some functions to *visualize*, *transform* and *replace NaN values* in the data.
