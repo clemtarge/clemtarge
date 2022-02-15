@@ -1,6 +1,6 @@
 ## Times series
 
-Link: https://machinelearningmastery.com/how-to-develop-convolutional-neural-network-models-for-time-series-forecasting/
+Link: https://machinelearningmastery.com/how-to-develop-convolutional-neural-network-models-for-time-series-forecasting/  
 Desc: Univariate/Multivariate CNN model, multi-step CNN model, with functions to prepare data
 
 ## Workflow management system (WMS)
