@@ -6,6 +6,9 @@ You can also *optimize* it with **Bayesian Optimization** by specifying model hy
 In this notebook, you will find some functions to *visualize*, *transform* and *replace NaN values* in the data.
 
 
+## Preprocessing time series (Python notebook)
+Some useful functions to deal with time series
+
 ## Statistical tests (R notebook)
 In this notebook, you will find some non parametric statistical tests to test:
 
