@@ -3,7 +3,7 @@
 Link: https://machinelearningmastery.com/how-to-develop-convolutional-neural-network-models-for-time-series-forecasting/  
 Desc: Univariate/Multivariate CNN model, multi-step CNN model, with functions to prepare data
 
-## Sampling method (design of experiments)
+## Sampling methods (design of experiments)
 Link: https://scikit-optimize.github.io/stable/auto_examples/sampler/initial-sampling-method.html
 Desc: Comparison between 
 
