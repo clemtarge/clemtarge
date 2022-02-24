@@ -14,3 +14,7 @@ Desc: API for sensitivity analysis
 ## Workflow management system (WMS)
 Link: https://towardsdatascience.com/data-pipelines-luigi-airflow-everything-you-need-to-know-18dc741449b7  
 Desc: Intro
+
+## Latex
+Link: https://detexify.kirelabs.org/classify.html  
+Desc: Draw a symbol then copy its code
