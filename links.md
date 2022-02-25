@@ -11,6 +11,10 @@ Desc: Comparison between
 Link: https://salib.readthedocs.io/en/latest/api.html  
 Desc: API for sensitivity analysis
 
+## Causal inference
+Link: https://towardsdatascience.com/causal-inference-using-bayesian-structural-time-series-models-ab1a3da45cd0  
+Desc: Determining the effect of an event on data
+
 ## Workflow management system (WMS)
 Link: https://towardsdatascience.com/data-pipelines-luigi-airflow-everything-you-need-to-know-18dc741449b7  
 Desc: Intro
