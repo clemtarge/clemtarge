@@ -1,6 +1,6 @@
 ## Sampling methods (design of experiments)
 Link: https://scikit-optimize.github.io/stable/auto_examples/sampler/initial-sampling-method.html  
-Desc: Comparison between 
+Desc: Comparison between sampling methods
 
 ## Sensitivity analysis
 Link: https://salib.readthedocs.io/en/latest/api.html  
