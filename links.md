@@ -1,8 +1,3 @@
-## Times series
-
-Link: https://machinelearningmastery.com/how-to-develop-convolutional-neural-network-models-for-time-series-forecasting/  
-Desc: Univariate/Multivariate CNN model, multi-step CNN model, with functions to prepare data
-
 ## Sampling methods (design of experiments)
 Link: https://scikit-optimize.github.io/stable/auto_examples/sampler/initial-sampling-method.html  
 Desc: Comparison between 
@@ -15,8 +10,8 @@ Desc: API for sensitivity analysis
 Link: https://towardsdatascience.com/causal-inference-using-bayesian-structural-time-series-models-ab1a3da45cd0  
 Desc: Determining the effect of an event on data
 
-## Workflow management system (WMS)
-Link: https://towardsdatascience.com/data-pipelines-luigi-airflow-everything-you-need-to-know-18dc741449b7  
+## Workflow management system (WMS) : Prefect
+Link: https://towardsdatascience.com/prefect-how-to-write-and-schedule-your-first-etl-pipeline-with-python-54005a34f10b  
 Desc: Intro
 
 ## Latex
