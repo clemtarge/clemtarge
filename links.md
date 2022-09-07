@@ -17,3 +17,6 @@ Desc: Intro
 ## Latex
 Link: https://detexify.kirelabs.org/classify.html  
 Desc: Draw a symbol then copy its code
+
+Link: https://www.tablesgenerator.com/#  
+Desc: Creating manually a Latex array
