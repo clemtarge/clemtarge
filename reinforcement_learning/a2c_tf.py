@@ -9,10 +9,11 @@ from typing import Any, List, Sequence, Tuple
 
 
 class A2C:
-    def __init__(self, env: gym.Env, reward_type: str):
+    def __init__(self, env: gym.Env, reward_type: str, gamma=0.95):
         self.env = env
         self.huber_loss = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)  # loss for critic
         self.eps = np.finfo(np.float32).eps.item()
+        self.gamma: float = gamma
         self.reward_types_available = {"int32": (np.int32, tf.int32),
                                        "float32": (np.float32, tf.float32),
                                        "int16": (np.int16, tf.int16),
@@ -21,7 +22,7 @@ class A2C:
 
     def env_step(self, action: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Returns state, reward and done flag given an action."""
-        state, reward, done, _ = self.env.step(action)
+        state, reward, done, _, _ = self.env.step(action)
         return (state.astype(np.float32),
                 np.array(reward, self.reward_types[0]),
                 np.array(done, np.int32))
@@ -37,8 +38,7 @@ class A2C:
         n = tf.shape(rewards)[0]
         returns = tf.TensorArray(dtype=tf.float32, size=n)
 
-        # Start from the end of `rewards` and accumulate reward sums
-        # into the `returns` array
+        # Start from the end of `rewards` and accumulate reward sums into the `returns` array
         rewards = tf.cast(rewards[::-1], dtype=tf.float32)
         discounted_sum = tf.constant(0.0)
         discounted_sum_shape = discounted_sum.shape
@@ -56,11 +56,12 @@ class A2C:
 
 
 class A2CDiscrete(A2C):
-    def __init__(self, env: gym.Env, reward_type: str):
-        super().__init__(env, reward_type)
+    def __init__(self, env: gym.Env, n_actions, reward_type: str, gamma=0.95):
+        super().__init__(env, reward_type, gamma)
+        self.model = ActorCriticModelDiscrete(n_actions=n_actions)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-2)
 
     def run_episode(self, initial_state: tf.Tensor,
-                    model: tf.keras.Model,
                     max_steps: int) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         """Runs a single episode to collect training data."""
 
@@ -76,7 +77,7 @@ class A2CDiscrete(A2C):
             state = tf.expand_dims(state, 0)
 
             # Run the model and to get action probabilities and critic value
-            action_logits_t, value = model(state)
+            action_logits_t, value = self.model(state)
 
             # Sample next action from the action probability distribution
             action = tf.random.categorical(action_logits_t, 1)[0, 0]
@@ -120,19 +121,16 @@ class A2CDiscrete(A2C):
 
     @tf.function
     def train_step(self, initial_state: tf.Tensor,
-                   model: tf.keras.Model,
-                   optimizer: tf.keras.optimizers.Optimizer,
-                   gamma: float,
                    max_steps_per_episode: int) -> tf.Tensor:
         """Runs a model training step."""
 
         with tf.GradientTape() as tape:
 
             # Run the model for one episode to collect training data
-            action_probs, values, rewards = self.run_episode(initial_state, model, max_steps_per_episode)
+            action_probs, values, rewards = self.run_episode(initial_state, max_steps_per_episode)
 
             # Calculate expected returns
-            returns = self.get_expected_return(rewards, gamma)
+            returns = self.get_expected_return(rewards, self.gamma)
 
             # Convert training data to appropriate TF tensor shapes
             action_probs, values, returns = [tf.expand_dims(x, 1) for x in [action_probs, values, returns]]
@@ -141,10 +139,8 @@ class A2CDiscrete(A2C):
             loss = self.compute_loss(action_probs, values, returns)
 
         # Compute the gradients from the loss
-        grads = tape.gradient(loss, model.trainable_variables)
-
-        # Apply the gradients to the model's parameters
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
         episode_reward = tf.math.reduce_sum(rewards)
 
@@ -152,11 +148,12 @@ class A2CDiscrete(A2C):
 
 
 class A2CContinuous(A2C):
-    def __init__(self, env: gym.Env, reward_type: str):
-        super().__init__(env, reward_type)
+    def __init__(self, env: gym.Env, n_actions, reward_type: str, gamma=0.95):
+        super().__init__(env, reward_type, gamma)
+        self.model = ActorCriticModelContinuous(n_actions=n_actions)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 
     def run_episode(self, initial_state: tf.Tensor,
-                    model: tf.keras.Model,
                     max_steps: int) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
         """Runs a single episode to collect training data."""
 
@@ -174,7 +171,7 @@ class A2CContinuous(A2C):
             state = tf.expand_dims(state, 0)
 
             # Run the model and to get action probabilities and critic value
-            action, norm_dist, value = model(state)
+            action, norm_dist, value = self.model(state)
 
             # Store critic values
             values = values.write(t, tf.squeeze(value))
@@ -223,19 +220,16 @@ class A2CContinuous(A2C):
 
     @tf.function
     def train_step(self, initial_state: tf.Tensor,
-                   model: tf.keras.Model,
-                   optimizer: tf.keras.optimizers.Optimizer,
-                   gamma: float,
                    max_steps_per_episode: int) -> tf.Tensor:
         """Runs a model training step."""
 
         with tf.GradientTape() as tape:
 
             # Run the model for one episode to collect training data
-            actions, mus, sigmas, values, rewards = self.run_episode(initial_state, model, max_steps_per_episode)
+            actions, mus, sigmas, values, rewards = self.run_episode(initial_state, max_steps_per_episode)
 
             # Calculate expected returns
-            returns = self.get_expected_return(rewards, gamma)
+            returns = self.get_expected_return(rewards, self.gamma)
 
             # Convert training data to appropriate TF tensor shapes
             actions, mus, sigmas, values, returns = [tf.expand_dims(x, 1) for x in [actions, mus, sigmas, values, returns]]
@@ -244,10 +238,10 @@ class A2CContinuous(A2C):
             loss = self.compute_loss(actions, mus, sigmas, values, returns)
 
         # Compute the gradients from the loss
-        grads = tape.gradient(loss, model.trainable_variables)
+        grads = tape.gradient(loss, self.model.trainable_variables)
 
         # Apply the gradients to the model's parameters
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
         episode_reward = tf.math.reduce_sum(rewards)
 
@@ -257,13 +251,13 @@ class A2CContinuous(A2C):
 class ActorCriticModelDiscrete(tf.keras.Model):
     """Combined actor-critic network."""
 
-    def __init__(self, num_actions: int):
+    def __init__(self, n_actions: int):
         super().__init__()
 
         self.hiddens = [layers.Dense(128, activation="relu"),
                         ]
 
-        self.actor = layers.Dense(num_actions)
+        self.actor = layers.Dense(n_actions)
         self.critic = layers.Dense(1)
 
     def call(self, inputs: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
@@ -277,15 +271,15 @@ class ActorCriticModelDiscrete(tf.keras.Model):
 class ActorCriticModelContinuous(tf.keras.Model):
     """Combined actor-critic network."""
 
-    def __init__(self, num_actions: int):
+    def __init__(self, n_actions: int):
         super().__init__()
 
         self.hiddens = [layers.Dense(32, activation="relu"),
                         layers.Dense(32, activation="relu")
                         ]
 
-        self.mu = layers.Dense(num_actions, activation="tanh")
-        self.sigma = layers.Dense(num_actions, activation="softplus")
+        self.mu = layers.Dense(n_actions, activation="tanh")
+        self.sigma = layers.Dense(n_actions, activation="softplus")
 
         self.critic = layers.Dense(1)
 
