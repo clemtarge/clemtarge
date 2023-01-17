@@ -2,9 +2,13 @@
 FastML allows you to *create*, *train*, *test*, and *save* your Machine Learning model with two lines of code.  
 You can also *optimize* it with **Bayesian Optimization** by specifying model hyperparameters.
 
+## Reinforcement learning
+Some codes to use Q-Learning or Actor-Critic agent in Pytorch. Actor-Critic is also available in Tensorflow 2.  
+The notebooks can be used as examples or as starting points.
+
+
 ## Preprocessing (Python notebook)
 In this notebook, you will find some functions to *visualize*, *transform* and *replace NaN values* in the data.
-
 
 ## Preprocessing time series (Python notebook)
 Some useful functions to deal with time series. Download `climate/` for toydata.  
