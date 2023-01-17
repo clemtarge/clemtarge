@@ -7,7 +7,7 @@ In this notebook, you will find some functions to *visualize*, *transform* and *
 
 
 ## Preprocessing time series (Python notebook)
-Some useful functions to deal with time series
+Some useful functions to deal with time series. Download `climate/` for toydata.  
 
 ## Statistical tests (R notebook)
 In this notebook, you will find some non parametric statistical tests to test:
