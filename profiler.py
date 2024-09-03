@@ -5,7 +5,7 @@ import time
 class Profiling:
     """
     >>> profiler = Profiling() # instantiate profiler
-    add @profiler as decorator at each function you want to profile
+    ## add @profiler as decorator at each function you want to profile
     >>> print(profiler) # display results
     """
     def __init__(self):
@@ -32,10 +32,27 @@ class Profiling:
     def __str__(self) -> str:
         total_time = sum(self.total_time.values())
         message = ""
-        for key in self.total_time.keys():
-            message += f"In {key}:\n"
-            message += f"  Total time: {self.total_time[key]:.3f}s\n"
-            message += f"  Num calls: {self.n_calls[key]}\n"
-            message += f"  Mean time: {self.total_time[key] / self.n_calls[key]:.3f}s\n"
-            message += f"  {100*self.total_time[key] / total_time:.2f}% of global time\n\n"
+
+        # Table headers
+        l1 = max(map(len, self.total_time.keys()))
+        l2 = 12
+        message += f"{'Function':^{l1}} {'Total time':^{l2}} {'Num calls':^{l2}} {'Mean time':^{l2}} {'% of global time':^{l2}} \n\n"
+        
+        keys = list(self.total_time.keys())
+        num_rows = len(keys)
+        num_cols = 5
+        table = [[None] * num_rows for _ in range(num_cols)]
+        
+        # Fill the table
+        for i, key in enumerate(keys):
+            table[0][i] = f"{key:^{l1}}"
+            table[1][i] = f"{f'{self.total_time[key]:.3f} s':^{l2}}"
+            table[2][i] = f"{self.n_calls[key]:^{l2}}"
+            table[3][i] = f"{f'{self.total_time[key] / self.n_calls[key]:.3f} s':^{l2}}"
+            table[4][i] = f"{f'{100*self.total_time[key] / total_time:.2f} %':^{l2}}"
+        
+        # Print the transposed table
+        for row in list(map(list, zip(*table))):
+            message += " ".join(row) + "\n"
+        
         return message
