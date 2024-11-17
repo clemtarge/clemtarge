@@ -70,7 +70,7 @@ def objective(trial, param_config, training_function, training_function_kwargs, 
             case "loguniform":
                 param_space[parameter_name] = trial.suggest_loguniform(parameter_name, *space)
             case "uniform":
-                param_space[parameter_name] = trial.suggest_uniform(parameter_name, *space)
+                param_space[parameter_name] = trial.suggest_float(parameter_name, *space)
             case "int":
                 param_space[parameter_name] = trial.suggest_int(parameter_name, *space)
             case _:
