@@ -2,3 +2,5 @@ FastML/src/Sphinx/*
 FastML/src/GP_EGO_test.ipynb
 FastML/src/test.ipynb
 FastML/src/api_old.py
+
+hyperopt_utils.py
