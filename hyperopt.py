@@ -1,29 +1,13 @@
 
-# https://wood-b.github.io/post/a-novices-guide-to-hyperparameter-optimization-at-scale/
-# https://valohaichirpprod.blob.core.windows.net/papers/huawei.pdf
-# https://docs.ray.io/en/latest/tune/examples/pbt_guide.html
-# https://docs.ray.io/en/latest/tune/examples/tune-vanilla-pytorch-lightning.html
-
-# https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks
-
-# python opti.py > out_pbt.txt 2>&1
-
 import comet_ml
-
-import copy
+import lightning.pytorch as pl
 import torch
 from torch.utils.data import DataLoader, random_split
-from torch.nn import functional as F
-
-import lightning.pytorch as pl
 from pytorch_lightning.loggers import TensorBoardLogger, CometLogger
-import ray
-from ray import train, tune
-from ray.tune import CLIReporter
-from ray.tune.schedulers import PopulationBasedTraining, ASHAScheduler
-from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
-from ray.air.integrations.comet import CometLoggerCallback
-from ray.tune.search.hebo import HEBOSearch
+from torch.nn import functional as F
+import optuna
+from optuna.integration import PyTorchLightningPruningCallback
+from optuna.samplers import TPESampler
 
 import random
 def set_seeds(seed):
@@ -32,184 +16,73 @@ def set_seeds(seed):
     torch.cuda.manual_seed(seed)
 
 
-class HPO:
-    """ Hyperparameter Optimization class """
-
-    def __init__(self,
-                 training_function,
-                 default_config: dict,
-                 metric: str,
-                 mode: str,
-                 training_function_kwargs: dict = {},
-                 checkpoint_score_attribute: str = "",
-                 checkpoint_score_order: str = "",
-                 cpu: int = 1,
-                 gpus_per_trial: int = 0,
-                 data_dir: str = "",
-                 comet_info: dict = {}):
-        
-        self.training_function = training_function
-        self.training_function_kwargs = training_function_kwargs
-        self.default_config = default_config
-        self.metric = metric
-        self.mode = mode
-        self.checkpoint_score_attribute=checkpoint_score_attribute or metric
-        self.checkpoint_score_order=checkpoint_score_order or mode
-        self.cpu = cpu
-        self.gpus_per_trial = gpus_per_trial
-        self.data_dir = data_dir
-        self.comet_info = comet_info
-
-        self.results = {}
+def hyperoptimisation(training_function,
+                      default_config: dict, # useful if not all parameters have to be optimized
+                      metric: str,
+                      mode: str,
+                      n_trials: int,
+                      param_config: dict,
+                      n_startup_trials: int,
+                      n_warmup_steps: int,
+                      interval_steps: int,
+                      n_jobs: int = 1,
+                      seed: int = None,
+                      training_function_kwargs: dict = {}):
+    """ Perform hyperparameter optimization with Optuna """
     
-    def get_default_config(self):
-        return copy.deepcopy(self.default_config)
+    study = optuna.create_study(sampler=TPESampler(n_startup_trials=n_startup_trials,
+                                                       n_ei_candidates=n_startup_trials,
+                                                       seed=seed,
+                                                       multivariate=True),
+                                pruner=optuna.pruners.MedianPruner(n_startup_trials=n_startup_trials,
+                                                                   n_warmup_steps=n_warmup_steps,
+                                                                   interval_steps=interval_steps,
+                                                                   n_min_trials=1),
+                                direction=mode,
+                                )
 
-    def getTune_with_resources(self,
-                               #max_training_iteration: int,
-                               training_function_kwargs: dict={}):
-        return tune.with_resources(tune.with_parameters(self.training_function,
-                                                        **training_function_kwargs,
-                                                        ),
-                                                        resources={"cpu": self.cpu, "gpu": self.gpus_per_trial})
+    study.optimize(lambda trial: objective(trial, param_config, training_function, training_function_kwargs, metric, default_config),
+                   n_trials=n_trials,
+                   timeout=600,
+                   n_jobs=n_jobs,
+                   gc_after_trial=True,
+                   show_progress_bar=True,
+                   )
     
-    def getRunConfig(self,
-                     name: str,
-                     max_training_iteration: int):
-        return train.RunConfig(name=name,
-                               storage_path=self.data_dir,
-                               checkpoint_config=train.CheckpointConfig(
-                                   num_to_keep=3,
-                                   checkpoint_score_attribute=self.checkpoint_score_attribute,
-                                   checkpoint_score_order=self.checkpoint_score_order,
-                                   ),
-                               stop={"training_iteration": max_training_iteration},
-                               callbacks=[CometLoggerCallback(**self.comet_info,
-                                                              tags=[name])],
-                               progress_reporter=CLIReporter(
-                                   max_progress_rows=20,
-                                   max_column_length=20,
-                                   max_report_frequency=5,
-                                   metric=self.metric,
-                                   mode=self.mode,
-                                   )
-                               )
+    results = study.trials_dataframe().sort_values("value", ascending=(mode=="minimize"))
+    print("Study name:", study.study_name)
+    print(results)
+    results.to_csv("optuna_trials.csv", index=False)
+    axs = optuna.visualization.matplotlib.plot_param_importances(study)
+    fig = axs.figure
+    fig.tight_layout()
+    fig.savefig("optuna_param_importances.png")
+    return
+
+
+def objective(trial, param_config, training_function, training_function_kwargs, metric, default_config):
+
+    param_space = {}
+    for parameter_name, (type, space) in param_config.items():
+        match type:
+            case "categorical":
+                param_space[parameter_name] = trial.suggest_categorical(parameter_name, space)
+            case "loguniform":
+                param_space[parameter_name] = trial.suggest_loguniform(parameter_name, *space)
+            case "uniform":
+                param_space[parameter_name] = trial.suggest_uniform(parameter_name, *space)
+            case "int":
+                param_space[parameter_name] = trial.suggest_int(parameter_name, *space)
+            case _:
+                raise ValueError(f"Unknown parameter type ({type}) for parameter {parameter_name}")
+
+    # Merge default config with trial params (order is important to overwrite default values)
+    param_space = {**default_config,
+                   **param_space,
+                   }
     
-    def getCommonParametersTuneConfig(self):
-        return {"metric": self.metric,
-                "mode": self.mode,
-                "max_concurrent_trials": 0,
-                "trial_name_creator": lambda trial: f"{trial.trial_id}", # name of the Experiment
-                "trial_dirname_creator": lambda trial: f"{trial.trial_id}"}
-    
-    def getTuner(self,
-                 max_training_iteration: int,
-                 training_function_kwargs: dict={},
-                 param_space=None,
-                 tune_config=None,
-                 run_config=None):
-        if param_space is None:
-            param_space = self.get_default_config()
-        if tune_config is None:
-            tune_config = tune.TuneConfig(**self.getCommonParametersTuneConfig())
-        if run_config is None:
-            run_config = self.getRunConfig("default", max_training_iteration)
-
-        return tune.Tuner(
-            # self.getTune_with_resources(max_training_iteration),
-            self.getTune_with_resources(training_function_kwargs=training_function_kwargs),
-            param_space=param_space,
-            tune_config=tune_config,
-            run_config=run_config,
-        )
-    
-    def tune_default(self,
-                     max_training_iteration: int):
-        """ Tune with default configuration """
-
-        tuner = self.getTuner(max_training_iteration, training_function_kwargs=self.training_function_kwargs)
-        results = tuner.fit()
-
-    def tune_asha(self,
-                  num_samples: int,
-                  max_training_iteration: int,
-                  param_space: dict,
-                  reduction_factor: int,
-                  n_best_to_keep: int=1):
-        """ Tune with ASHA """
-
-        tuner = self.getTuner(max_training_iteration=max_training_iteration,
-                              param_space={**self.get_default_config(),
-                                           **param_space,
-                                           },
-                              tune_config=tune.TuneConfig(**self.getCommonParametersTuneConfig(),
-                                                          search_alg=HEBOSearch(metric=self.metric,
-                                                                                mode=self.mode,
-                                                                                random_state_seed=0), # pip install 'HEBO>=0.2.0'
-                                                                                scheduler=ASHAScheduler(time_attr="training_iteration",
-                                                                                                        grace_period=1,
-                                                                                                        reduction_factor=reduction_factor),
-                                                          num_samples=num_samples),
-                              run_config=self.getRunConfig("asha", max_training_iteration))
-        results = tuner.fit()
-
-        self.results["asha"] = results.get_dataframe(filter_metric=self.metric, filter_mode=self.mode).sort_values(self.metric, ascending=self.mode=="min", ignore_index=True).iloc[:n_best_to_keep].filter(regex="config/.*").rename(columns=lambda x: x.split("/")[-1]).to_dict(orient="records")
-        print(f"Best hyperparameters found:\n   {self.results['asha']}")
-
-    def tune_pbt(self,
-                 num_samples: int,
-                 max_training_iteration: int,
-                 param_space: dict,
-                 perturbation_interval: int):
-        """ Tune with PBT """
-
-        if "asha" in self.results:
-            configs = self.results["asha"]
-        else:
-            configs = [{}]
-
-        for config in configs:
-            print(f"\n------------------------------------ Start PBT with {config} ------------------------------------\n")
-
-            tuner = self.getTuner(max_training_iteration=max_training_iteration,
-                                  param_space={**self.get_default_config(), # order is important to overwrite default values
-                                               **config,
-                                               **param_space,
-                                               },
-                                  tune_config=tune.TuneConfig(**self.getCommonParametersTuneConfig(),
-                                                              scheduler=PopulationBasedTraining(time_attr="training_iteration",
-                                                                                                perturbation_interval=perturbation_interval,
-                                                                                                hyperparam_mutations={
-                                                                                                    "lr": tune.loguniform(1e-4, 5e-2),
-                                                                                                    "batch_size": [16,32,64]
-                                                                                                    }, # distribution for resampling
-                                                                                                quantile_fraction=0.25,
-                                                                                                resample_probability=0.25, # The probability of resampling from the original distribution
-                                                                                                perturbation_factors=(1.2, 0.8),
-                                                                                                log_config=True,
-                                                                                                ),
-                                                              num_samples=num_samples),
-                                  run_config=self.getRunConfig("pbt", max_training_iteration))
-            results = tuner.fit()
-
-            best_result = results.get_best_result(metric=self.metric, mode=self.mode)
-            print(f"Best hyperparameters found:\n   {best_result.config}")
-
-    def tune_pbt_replay(self,
-                        max_training_iteration: int,
-                        pbt_policy_txt_path: str):
-        """ Tune with PBT replay """
-        import glob
-        from ray.tune.schedulers import PopulationBasedTrainingReplay
-
-        # Get a random replay policy from the experiment we just ran
-        sample_pbt_trial_log = sorted(glob.glob(os.path.expanduser(pbt_policy_txt_path)))[0]
-        replay = PopulationBasedTrainingReplay(sample_pbt_trial_log)
-
-        tuner = self.getTuner(max_training_iteration=max_training_iteration,
-                              tune_config=tune.TuneConfig(**self.getCommonParametersTuneConfig(), scheduler=replay),
-                              run_config=self.getRunConfig("pbt_replay", max_training_iteration))
-        results = tuner.fit()
+    # Return the monitored metric value
+    return training_function(param_space, **training_function_kwargs, trial=trial, monitored_metric=metric)
 
 
 if __name__ == '__main__':
@@ -221,7 +94,6 @@ if __name__ == '__main__':
     from torchvision import transforms
     from hyperopt_utils import data_dir, comet_info
 
-    ray.init(num_gpus=1)#, _temp_dir=f"{data_dir}/ray/") ##### use symlink
     opj = os.path.join
 
     class LightningMNISTClassifier(pl.LightningModule):
@@ -246,6 +118,7 @@ if __name__ == '__main__':
                             'sigmoid': torch.nn.Sigmoid(),
                             'tanh': torch.nn.Tanh(),
                             'leaky_relu': torch.nn.LeakyReLU()}[config["activation"]]
+            self.save_hyperparameters()
 
         def forward(self, x):
             batch_size, channels, width, height = x.size()
@@ -273,6 +146,10 @@ if __name__ == '__main__':
 
         def on_train_epoch_start(self):
             set_seeds(0)
+
+        # def on_fit_end(self):
+        #     self.loggers[0].experiment.log_metric("epoch", self.current_epoch)
+        #     self.loggers[0].log_hyperparams(self.hparams)
 
         def training_step(self, train_batch, batch_idx):
             x, y = train_batch
@@ -324,7 +201,8 @@ if __name__ == '__main__':
             return optimizer
 
 
-    def train_model(config, num_epochs=4, data_dir=""):
+    def train_model(config, num_epochs, data_dir="", trial=None, monitored_metric="val_loss"):
+        """ Train a model with the given config and return the monitored metric value """
 
         model = LightningMNISTClassifier(config=config, data_dir=data_dir)
 
@@ -334,56 +212,45 @@ if __name__ == '__main__':
                             #  logger=TensorBoardLogger(save_dir=f"{data_dir}/lightning_logs", name="", version="."),
                             logger=CometLogger(**comet_info),
                             max_epochs=num_epochs,
-                            enable_progress_bar=False,
+                            enable_progress_bar=True,
                             enable_model_summary=True,
-                            callbacks=[TuneReportCheckpointCallback(metrics={"loss": "val_loss", "mean_accuracy": "val_accuracy"},
-                                                                    filename="checkpoint.ckpt",
-                                                                    on="validation_end")
-                            ],
+                            callbacks=[PyTorchLightningPruningCallback(trial, monitor=monitored_metric)] if trial else [],
                             # profiler="simple"
         )
 
-        # If `train.get_checkpoint()` is populated, then we are resuming from a checkpoint.
-        checkpoint = train.get_checkpoint()
-        if checkpoint:
-            with checkpoint.as_directory() as checkpoint_dir:
-                ckpt_path = os.path.join(checkpoint_dir, "checkpoint.ckpt")
-        else:
-            ckpt_path = None
+        trainer.fit(model)
+        monitored_metric_value = trainer.callback_metrics[monitored_metric].item()
+        return monitored_metric_value
 
-        trainer.fit(model, ckpt_path=ckpt_path)
-
-
-    default_config = {"layer_1_size": 16,#8,
-                      "layer_2_size": 32,#8,
-                      "activation": "sigmoid",#"relu",
+    # Default config for the model
+    default_config = {"layer_1_size": 16,
+                      "layer_2_size": 32,
+                      "activation": "sigmoid",
                       "lr": 1e-2,
-                      "batch_size": 64
+                      "batch_size": 256,
                       }
+    
+    # Train the model with the default config
+    # train_model(default_config, num_epochs=5, data_dir=data_dir)
 
-    param_space_architecture = {"layer_1_size": tune.choice([4, 8, 16, 32, 64]),
-                                "layer_2_size": tune.choice([8, 16, 32, 64, 128]),
-                                "activation": tune.choice(["relu", "sigmoid", "tanh", "leaky_relu"]),
-                                }
-    param_space_scheduler =  {"lr": tune.loguniform(1e-4, 5e-2),
-                            "batch_size": tune.choice([16, 32, 64])
-                            }
+    # Define the hyperparameter search space
+    param_config = {"layer_1_size": ["categorical", [4, 8, 16, 32, 64]],
+                    "layer_2_size": ["categorical", [8, 16, 32, 64, 128]],
+                    "activation": ["categorical", ["relu", "sigmoid", "tanh", "leaky_relu"]],
+                    "lr": ["loguniform", [1e-4, 1e-1]],
+                    }
 
-    # train_model(get_default_config(), num_epochs=5, data_dir=data_dir); exit()
-    hpo = HPO(training_function=train_model,
-              training_function_kwargs={"num_epochs": 5,
-                                        "data_dir": data_dir},
-              default_config=default_config,
-              metric="loss", # "mean_accuracy"
-              mode="min", # "max"
-              checkpoint_score_attribute="mean_accuracy",
-              checkpoint_score_order="max",
-              cpu=1,
-              gpus_per_trial=1,
-              data_dir=data_dir,
-              comet_info=comet_info)
-
-    hpo.tune_default(3)
-    # hpo.tune_asha(num_samples=3, max_training_iteration=3, param_space=param_space_architecture, reduction_factor=4, n_best_to_keep=1)
-    # hpo.tune_pbt(num_samples=4, max_training_iteration=5, param_space=param_space_scheduler, perturbation_interval=2)
-    # hpo.tune_pbt_replay(max_training_iteration=5, pbt_policy_txt_path="/tmp/ray/session_2024-08-13_14-51-33_008092_3855823/artifacts/2024-08-13_14-51-38/pbt/driver_artifacts/pbt_policy*.txt")
+    # Perform hyperparameter optimization
+    hyperoptimisation(training_function=train_model,
+                      default_config=default_config, # useful if not all parameters have to be optimized
+                      metric="val_loss",
+                      mode="minimize",
+                      n_trials=8,
+                      param_config=param_config,
+                      n_startup_trials=4,
+                      n_warmup_steps=2,
+                      interval_steps=2,
+                      n_jobs=1,
+                      #seed=0,
+                      training_function_kwargs={"num_epochs": 6, "data_dir": data_dir})
+    
