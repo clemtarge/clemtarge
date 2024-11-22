@@ -1,5 +1,6 @@
 
 import comet_ml
+import os
 import lightning.pytorch as pl
 import torch
 from torch.utils.data import DataLoader, random_split
@@ -15,6 +16,8 @@ def set_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
+opj = os.path.join
+hpo_logging_dir = ""
 
 def hyperoptimisation(training_function,
                       default_config: dict, # useful if not all parameters have to be optimized
@@ -52,11 +55,11 @@ def hyperoptimisation(training_function,
     results = study.trials_dataframe().sort_values("value", ascending=(mode=="minimize"))
     print("Study name:", study.study_name)
     print(results)
-    results.to_csv("optuna_trials.csv", index=False)
+    results.to_csv(opj(hpo_logging_dir, "optuna_trials.csv"), index=False)
     axs = optuna.visualization.matplotlib.plot_param_importances(study)
     fig = axs.figure
     fig.tight_layout()
-    fig.savefig("optuna_param_importances.png")
+    fig.savefig(opj(hpo_logging_dir, "optuna_param_importances.png"))
     return
 
 
