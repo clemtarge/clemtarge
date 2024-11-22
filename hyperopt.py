@@ -46,7 +46,6 @@ def hyperoptimisation(training_function,
 
     study.optimize(lambda trial: objective(trial, param_config, training_function, training_function_kwargs, metric, default_config),
                    n_trials=n_trials,
-                   timeout=600,
                    n_jobs=n_jobs,
                    gc_after_trial=True,
                    show_progress_bar=True,
